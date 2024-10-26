@@ -1,4 +1,4 @@
-import Comment from "../schema/comment.js";
+import Comment, { Reply } from "../schema/comment.js";
 import Post from "../schema/post.js";
 import { addComment } from "./commentRepository.js";
 
@@ -61,23 +61,57 @@ export const deletePostById = async (id) => {
 
 export const updatePostById = async (id, updateObject) => {
   try {
-    if (updateObject.comment) {
-      const post = await Post.findById(id);
-      const newComment = await addComment({
-        comment: updateObject.comment,
-        user: updateObject.user,
-        post: id,
-      });
-      post.comments.push(newComment._id);
-
-      await post.save();
+    const post = await Post.findById(id);
+    if (!post) {
+      throw new Error("Post not found");
     }
-    const post = await Post.findByIdAndUpdate(id, updateObject, {
+    if (updateObject.commentId) {
+      const comment = await Comment.findById(updateObject.commentId).populate(
+        "replies",
+        ["reply", "user"]
+      );
+      if (!comment) {
+        throw new Error("Comment not found");
+      }
+      if (updateObject.reply) {
+        const reply = await Reply.create({
+          reply: updateObject.reply,
+          user: updateObject.repliedBy,
+          post: id,
+          comment: updateObject.commentId,
+        });
+        comment.replies.push(reply._id);
+        await comment.save();
+      }
+      if (updateObject.clikes !== undefined) {
+        comment.likes = updateObject.clikes;
+      }
+      if (updateObject.comment) {
+        comment.comment = updateObject.comment;
+      }
+      await comment.save();
+    }
+    if (updateObject.comment && !updateObject.commentId) {
+      const newComment = await addComment({
+        postId: id,
+        likes: updateObject.clikes || 0,
+        userId: updateObject.user,
+        commentText: updateObject.comment,
+      });
+    }
+    const updatedPost = await Post.findByIdAndUpdate(id, updateObject, {
       new: true,
-    }).populate("comments", ["comment", "likes"]);
-
-    return post;
+    }).populate({
+      path: "comments",
+      select: ["comment", "likes", "replies"],
+      populate: {
+        path: "replies",
+        select: ["reply", "user"],
+      },
+    });
+    return updatedPost;
   } catch (error) {
     console.log(error);
+    throw new Error("Failed to update post");
   }
 };

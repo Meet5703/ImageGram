@@ -9,12 +9,14 @@ export const addComment = async ({ postId, userId, commentText }) => {
     }
     const newComment = await Comment.create({
       comment: commentText,
+      likes: 0,
+      replies: [],
       user: userId,
       post: postId,
     });
 
-    post.comments.push(newComment._id);
-    await post.save();
+    newPost.comments.push(newComment._id);
+    await newPost.save();
 
     return newComment;
   } catch (error) {
